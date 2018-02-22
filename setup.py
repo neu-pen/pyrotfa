@@ -18,7 +18,7 @@ REQUIRED = [
     'hypertools',
     'matplotlib',
     'nilearn',
-    'pyro',
+    'pyro-ppl',
     'seaborn',
 ]
 
