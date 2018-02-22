@@ -127,32 +127,19 @@ def initialize_tfa_guide(activations, locations, num_factors):
     factor_log_width_std_dev = pyro.param('factor_log_width_std_dev',
                                           factor_log_width_std_dev)
 
-    def tfa_guide(num_samples=NUM_SAMPLES, times=None):
+    def tfa_guide(times=None):
         weight_mu = mean_weight
         weight_sigma = weight_std_dev
         if times is not None:
             weight_mu = weight_mu[times[0]:times[1], :]
             weight_sigma = weight_sigma[times[0]:times[1], :]
-        weight_mu = weight_mu.expand(num_samples, weight_mu.shape[0],
-                                     num_factors)
-        weight_sigma = weight_sigma.expand(num_samples, weight_sigma.shape[0],
-                                           num_factors)
 
-        factor_center_mu = mean_centers.expand(num_samples, num_factors, 3)
-        factor_center_sigma = factor_center_std_dev.expand(num_samples,
-                                                           num_factors, 3)
-
-        factor_log_width_mu = mean_factor_log_width.expand(num_samples,
-                                                           num_factors)
-        factor_log_width_sigma = factor_log_width_std_dev.expand(num_samples,
-                                                                 num_factors)
-
-        weight = pyro.sample('weight', dist.normal, weight_mu, weight_sigma)
-        factor_center = pyro.sample('factor_center', dist.normal,
-                                    factor_center_mu, factor_center_sigma)
-        factor_log_width = pyro.sample('factor_log_width', dist.normal,
-                                       factor_log_width_mu,
-                                       factor_log_width_sigma)
+        weight = pyro.sample('weights', dist.normal, weight_mu, weight_sigma)
+        factor_center = pyro.sample('factor_centers', dist.normal,
+                                    mean_centers, factor_center_std_dev)
+        factor_log_width = pyro.sample('factor_log_widths', dist.normal,
+                                       mean_factor_log_width,
+                                       factor_log_width_std_dev)
         return (weight, factor_center, factor_log_width)
 
     return tfa_guide
