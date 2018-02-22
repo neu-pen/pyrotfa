@@ -27,6 +27,10 @@ import pyro.distributions as dist
 
 from . import utils
 
+EPOCHS=20
+EPOCH_MSG = '[Epoch %d] (%dms) Posterior ELBO %.8e'
+LEARNING_RATE = 1e-6
+LOSS = 'ELBO'
 NUM_FACTORS = 10
 NUM_SAMPLES = 100
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
