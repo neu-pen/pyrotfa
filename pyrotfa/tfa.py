@@ -16,6 +16,7 @@ import numpy as np
 import scipy.io as sio
 from sklearn.cluster import KMeans
 import torch
+import torch.cuda
 import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
@@ -24,6 +25,8 @@ import torch.utils.data
 
 import pyro
 import pyro.distributions as dist
+import pyro.infer
+import pyro.optim
 
 from . import utils
 
@@ -178,3 +181,35 @@ class TopographicalFactorAnalysis:
                                               voxel_noise=VOXEL_NOISE)
         self.tfa_guide = initialize_tfa_guide(self.activations, self.locations,
                                               num_factors=num_factors)
+
+    def infer(self, epochs=EPOCHS, learning_rate=LEARNING_RATE, loss=LOSS,
+              log_level=logging.WARNING):
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=log_level)
+
+        pyro.clear_param_store()
+        data = {'activations': Variable(self.activations)}
+        if torch.cuda.is_available():
+            softplus.cuda()
+            data['activations'].cuda()
+        conditioned_tfa = pyro.condition(self.tfa_model, data=data)
+
+        svi = pyro.infer.SVI(model=conditioned_tfa, guide=self.tfa_guide,
+                             optim=pyro.optim.SGD({'lr': learning_rate}),
+                             loss=loss)
+
+        losses = np.zeros(epochs)
+        for e in range(epochs):
+            start = time.time()
+
+            losses[e] = svi.step()
+
+            end = time.time()
+            logging.info(EPOCH_MSG, e + 1, (end - start) * 1000, losses[e])
+
+        if torch.cuda.is_available():
+            data['activations'].cpu()
+            softplus.cpu()
+
+        return losses
