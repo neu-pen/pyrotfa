@@ -32,7 +32,7 @@ SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
 
-def initialize_generative(activations, locations, num_factors, voxel_noise):
+def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
     num_times = activations.shape[0]
     num_voxels = activations.shape[1]
 
@@ -58,7 +58,7 @@ def initialize_generative(activations, locations, num_factors, voxel_noise):
         SOURCE_LOG_WIDTH_STD_DEV * torch.ones(num_factors)
     )
 
-    def generative_model(times=None):
+    def tfa(times=None):
         weight_mu = mean_weight
         weight_sigma = weight_std_dev
         if times is not None:
@@ -81,7 +81,7 @@ def initialize_generative(activations, locations, num_factors, voxel_noise):
             Variable(voxel_noise * torch.ones((weights.shape[0], locations.shape[0])))
         )
 
-    return generative_model
+    return tfa
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
@@ -104,7 +104,7 @@ class TopographicalFactorAnalysis:
         # This could be a huge file.  Close it
         del dataset
 
-        self.generative_model = initialize_generative(self.activations,
-                                                      self.locations,
-                                                      num_factors=num_factors,
-                                                      voxel_noise=VOXEL_NOISE)
+        self.tfa_model = initialize_tfa_model(self.activations,
+                                              self.locations,
+                                              num_factors=num_factors,
+                                              voxel_noise=VOXEL_NOISE)
