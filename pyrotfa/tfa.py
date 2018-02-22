@@ -28,6 +28,7 @@ import pyro.distributions as dist
 from . import utils
 
 NUM_FACTORS = 10
+NUM_SAMPLES = 100
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
