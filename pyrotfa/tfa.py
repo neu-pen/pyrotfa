@@ -182,3 +182,5 @@ class TopographicalFactorAnalysis:
                                               self.locations,
                                               num_factors=num_factors,
                                               voxel_noise=VOXEL_NOISE)
+        self.tfa_guide = initialize_tfa_guide(self.activations, self.locations,
+                                              num_factors=num_factors)
