@@ -13,6 +13,12 @@ import numpy as np
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
+import torch
+
+def radial_basis(locations, centers, log_widths):
+    """The radial basis function used as the shape for the factors"""
+    delta2s = (locations.unsqueeze(0) - centers.unsqueeze(1))**2
+    return torch.exp(-delta2s.sum(2) / torch.exp(log_widths.unsqueeze(1)))
 
 def plot_losses(losses):
     epochs = range(losses.shape[1])
