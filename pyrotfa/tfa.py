@@ -92,20 +92,11 @@ def initialize_tfa_guide(activations, locations, num_factors):
                     random_state=100)
     kmeans.fit(locations.numpy())
 
-    mean_centers = pyro.param('mean_centers',
-                              Variable(torch.Tensor(kmeans.cluster_centers_)))
-    factor_center_std_dev = Variable(torch.sqrt(torch.rand(
-        (num_factors, 3)
-    )))
-    factor_center_std_dev = pyro.param('factor_center_std_dev',
-                                       factor_center_std_dev)
+    mean_centers = torch.Tensor(kmeans.cluster_centers_)
+    mean_log_widths = np.log(2) + 2 * np.log(np.nanmax(np.std(locations.numpy(), axis=0)))
+    mean_log_widths *= torch.ones(num_factors)
 
-    mean_log_widths = np.log(
-        2.0 * math.pow(np.nanmax(torch.std(locations, dim=0).numpy()), 2)
-    )
-    mean_log_widths *= torch.ones((num_factors))
-
-    initial_factors = utils.radial_basis(locations, mean_centers.data,
+    initial_factors = utils.radial_basis(locations, mean_centers,
                                          mean_log_widths)
     initial_factors_T = initial_factors.t()
     activations_T = activations.t()
@@ -113,33 +104,41 @@ def initialize_tfa_guide(activations, locations, num_factors):
         np.linalg.solve(initial_factors.matmul(initial_factors_T),
                         initial_factors.matmul(activations_T))
     )
-    mean_weight = pyro.param('mean_weight',
-                             Variable(initial_weights.t()))
-    weight_std_dev = Variable(torch.sqrt(torch.rand((num_times, num_factors))))
-    weight_std_dev = pyro.param('weight_std_dev', weight_std_dev)
-
-    mean_factor_log_width = Variable(mean_log_widths * torch.ones(num_factors))
-    mean_factor_log_width = pyro.param('mean_factor_log_width',
-                                       mean_factor_log_width)
-    factor_log_width_std_dev = Variable(torch.sqrt(torch.rand(
-        (num_factors)
-    )))
-    factor_log_width_std_dev = pyro.param('factor_log_width_std_dev',
-                                          factor_log_width_std_dev)
 
     def tfa_guide(times=None):
-        weight_mu = mean_weight
-        weight_sigma = weight_std_dev
+        weight_mu = pyro.param('mean_weight', Variable(initial_weights.t(), requires_grad=True))
+        weight_sigma = pyro.param(
+            'weight_std_dev',
+            Variable(torch.sqrt(torch.rand((num_times, num_factors))), requires_grad=True)
+        )
         if times is not None:
             weight_mu = weight_mu[times[0]:times[1], :]
             weight_sigma = weight_sigma[times[0]:times[1], :]
-
         weight = pyro.sample('weights', dist.normal, weight_mu, weight_sigma)
+
+        centers_mu = pyro.param(
+            'mean_centers',
+            Variable(mean_centers, requires_grad=True)
+        )
+        center_sigma = pyro.param(
+            'factor_center_std_dev',
+            Variable(torch.sqrt(torch.rand((num_factors, 3))),
+                     requires_grad=True)
+        )
         factor_center = pyro.sample('factor_centers', dist.normal,
-                                    mean_centers, factor_center_std_dev)
+                                    centers_mu, center_sigma)
+
+        log_width_mu = pyro.param(
+            'mean_factor_log_width',
+            Variable(mean_log_widths, requires_grad=True)
+        )
+        log_width_sigma = pyro.param(
+            'factor_log_width_std_dev',
+            Variable(torch.sqrt(torch.rand((num_factors))), requires_grad=True)
+        )
         factor_log_width = pyro.sample('factor_log_widths', dist.normal,
-                                       mean_factor_log_width,
-                                       factor_log_width_std_dev)
+                                       log_width_mu,
+                                       log_width_sigma)
         return (weight, factor_center, factor_log_width)
 
     return tfa_guide
