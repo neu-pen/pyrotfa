@@ -107,14 +107,14 @@ def initialize_tfa_guide(activations, locations, num_factors):
 
     initial_factors = utils.radial_basis(locations, mean_centers.data,
                                          mean_log_widths)
-    initial_factors_T = initial_factors.transpose(0, 1)
-    activations_T = activations.transpose(0, 1)
+    initial_factors_T = initial_factors.t()
+    activations_T = activations.t()
     initial_weights = torch.Tensor(
         np.linalg.solve(initial_factors.matmul(initial_factors_T),
                         initial_factors.matmul(activations_T))
     )
     mean_weight = pyro.param('mean_weight',
-                             Variable(initial_weights.transpose(0, 1)))
+                             Variable(initial_weights.t()))
     weight_std_dev = Variable(torch.sqrt(torch.rand((num_times, num_factors))))
     weight_std_dev = pyro.param('weight_std_dev', weight_std_dev)
 
@@ -159,7 +159,7 @@ class TopographicalFactorAnalysis:
         # pull out the voxel activations and locations
         data = dataset['data']
         R = dataset['R']
-        self.activations = torch.Tensor(data).transpose(0, 1)
+        self.activations = torch.Tensor(data).t()
         self.locations = torch.Tensor(R)
 
         # This could be a huge file.  Close it
