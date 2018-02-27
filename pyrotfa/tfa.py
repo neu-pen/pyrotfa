@@ -35,7 +35,7 @@ EPOCH_MSG = '[Epoch %d] (%dms) Posterior ELBO %.8e'
 LEARNING_RATE = 1e-6
 LOSS = 'ELBO'
 NUM_FACTORS = 10
-NUM_SAMPLES = 100
+NUM_PARTICLES = 10
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
@@ -183,7 +183,7 @@ class TopographicalFactorAnalysis:
                                               num_factors=num_factors)
 
     def infer(self, epochs=EPOCHS, learning_rate=LEARNING_RATE, loss=LOSS,
-              log_level=logging.WARNING):
+              log_level=logging.WARNING, num_particles=NUM_PARTICLES):
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
@@ -197,7 +197,7 @@ class TopographicalFactorAnalysis:
 
         svi = pyro.infer.SVI(model=conditioned_tfa, guide=self.tfa_guide,
                              optim=pyro.optim.SGD({'lr': learning_rate}),
-                             loss=loss)
+                             loss=loss, num_particles=num_particles)
 
         losses = np.zeros(epochs)
         for e in range(epochs):
