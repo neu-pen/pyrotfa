@@ -240,3 +240,36 @@ class TopographicalFactorAnalysis:
             )
 
         return means
+
+    def plot_voxels(self):
+        hyp.plot(self.locations.numpy(), 'k.')
+
+    def plot_factor_centers(self, filename=None, show=True,
+                            log_level=logging.WARNING):
+        means = self.guide_means(log_level=log_level)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            means['mean_centers'],
+            node_color='k'
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_original_brain(self, filename=None, show=True, plot_abs=False):
+        original_image = utils.cmu2nii(self.activations.numpy(),
+                                       self.locations.numpy(),
+                                       self._template)
+        plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
