@@ -213,3 +213,30 @@ class TopographicalFactorAnalysis:
             softplus.cpu()
 
         return losses
+
+    def guide_means(self, log_level=logging.WARNING, matfile=None,
+                    reconstruct=False):
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=log_level)
+
+        params = pyro.get_param_store()
+        means = {}
+        for (name, var) in params.named_parameters():
+            if 'mean' in name:
+                means[name] = var.data
+        mean_factors = utils.radial_basis(self.locations,
+                                          means['mean_centers'],
+                                          means['mean_factor_log_width'])
+
+        if matfile is not None:
+            sio.savemat(matfile, means, do_compression=True)
+
+        if reconstruct:
+            self.reconstruction = means['mean_weight'] @ mean_factors
+            logging.info(
+                'Reconstruction Error (Frobenius Norm): %.8e',
+                np.linalg.norm(self.reconstruction - self.activations)
+            )
+
+        return means
