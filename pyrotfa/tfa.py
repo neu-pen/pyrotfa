@@ -182,6 +182,8 @@ class TopographicalFactorAnalysis:
         self.tfa_guide = initialize_tfa_guide(self.activations, self.locations,
                                               num_factors=num_factors)
 
+        self.reconstruction = None
+
     def infer(self, epochs=EPOCHS, learning_rate=LEARNING_RATE, loss=LOSS,
               log_level=logging.WARNING, num_particles=NUM_PARTICLES):
         logging.basicConfig(format='%(asctime)s %(message)s',
@@ -266,6 +268,22 @@ class TopographicalFactorAnalysis:
                                        self.locations.numpy(),
                                        self._template)
         plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
+                            log_level=logging.WARNING):
+        self.guide_means(log_level=log_level, reconstruct=True)
+
+        image = utils.cmu2nii(self.reconstruction,
+                              self.locations.numpy(),
+                              self._template)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
 
         if filename is not None:
             plot.savefig(filename)
