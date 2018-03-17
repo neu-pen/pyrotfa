@@ -32,7 +32,7 @@ from . import utils
 
 EPOCHS=20
 EPOCH_MSG = '[Epoch %d] (%dms) Posterior ELBO %.8e'
-LEARNING_RATE = 1e-6
+LEARNING_RATE = 1e-4
 LOSS = 'ELBO'
 NUM_FACTORS = 10
 NUM_PARTICLES = 10
@@ -196,7 +196,7 @@ class TopographicalFactorAnalysis:
         conditioned_tfa = pyro.condition(self.tfa_model, data=data)
 
         svi = pyro.infer.SVI(model=conditioned_tfa, guide=self.tfa_guide,
-                             optim=pyro.optim.SGD({'lr': learning_rate}),
+                             optim=pyro.optim.Adam({'lr': learning_rate}),
                              loss=loss, num_particles=num_particles)
 
         losses = np.zeros(epochs)
