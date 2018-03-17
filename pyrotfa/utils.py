@@ -15,6 +15,13 @@ import nibabel as nib
 from nilearn.input_data import NiftiMasker
 import torch
 
+def unsqueeze_and_expand(tensor, dim, size, clone=False):
+    if clone:
+        tensor = tensor.clone()
+
+    shape = [size] + list(tensor.shape)
+    return tensor.unsqueeze(dim).expand(*shape)
+
 def radial_basis(locations, centers, log_widths):
     """The radial basis function used as the shape for the factors"""
     delta2s = (locations.unsqueeze(0) - centers.unsqueeze(1))**2
