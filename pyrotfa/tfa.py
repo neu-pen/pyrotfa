@@ -85,8 +85,8 @@ def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
         return pyro.sample(
             'activations',
             dist.normal,
-            torch.matmul(weights, factors),
-            softplus(Variable(voxel_noise * torch.ones((weights.shape[0], locations.shape[0]))))
+            weights @ factors,
+            softplus(Variable(voxel_noise * torch.ones((weights.shape[0], factors.shape[1]))))
         )
 
     return tfa
@@ -100,20 +100,18 @@ def initialize_tfa_guide(activations, locations, num_factors):
     kmeans.fit(locations.numpy())
 
     mean_centers = torch.Tensor(kmeans.cluster_centers_)
-    mean_log_widths = np.log(2) + 2 * np.log(np.nanmax(np.std(locations.numpy(), axis=0)))
-    mean_log_widths *= torch.ones(num_factors)
+    mean_log_widths = torch.log(torch.Tensor([2]))
+    mean_log_widths += 2 * torch.log(torch.Tensor([locations.std(dim=0).max()]))
 
     initial_factors = utils.radial_basis(locations, mean_centers,
                                          mean_log_widths)
-    initial_factors_T = initial_factors.t()
-    activations_T = activations.t()
     initial_weights = torch.Tensor(
-        np.linalg.solve(initial_factors.matmul(initial_factors_T),
-                        initial_factors.matmul(activations_T))
-    )
+        np.linalg.solve(initial_factors @ initial_factors.t(),
+                        initial_factors @ activations.t())
+    ).t()
 
     def tfa_guide(times=None):
-        weight_mu = pyro.param('mean_weight', Variable(initial_weights.t(), requires_grad=True))
+        weight_mu = pyro.param('mean_weight', Variable(initial_weights, requires_grad=True))
         weight_sigma = pyro.param(
             'weight_std_dev',
             Variable(torch.sqrt(torch.rand((num_times, num_factors))), requires_grad=True)
@@ -136,7 +134,7 @@ def initialize_tfa_guide(activations, locations, num_factors):
 
         log_width_mu = pyro.param(
             'mean_factor_log_width',
-            Variable(mean_log_widths, requires_grad=True)
+            Variable(mean_log_widths * torch.ones((num_factors)), requires_grad=True)
         )
         log_width_sigma = pyro.param(
             'factor_log_width_std_dev',
