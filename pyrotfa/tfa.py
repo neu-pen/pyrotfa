@@ -16,6 +16,7 @@ import numpy as np
 import scipy.io as sio
 from sklearn.cluster import KMeans
 import torch
+import torch.cuda
 import torch.distributions as dists
 from torch.autograd import Variable
 import torch.nn as nn
@@ -24,11 +25,17 @@ import torch.utils.data
 
 import pyro
 import pyro.distributions as dist
+import pyro.infer
+import pyro.optim
 
 from . import utils
 
+EPOCHS=20
+EPOCH_MSG = '[Epoch %d] (%dms) Posterior ELBO %.8e'
+LEARNING_RATE = 1e-4
+LOSS = 'ELBO'
 NUM_FACTORS = 10
-NUM_SAMPLES = 100
+NUM_PARTICLES = 10
 SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
@@ -85,8 +92,8 @@ def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
         return pyro.sample(
             'activations',
             dist.normal,
-            torch.matmul(weights, factors),
-            softplus(Variable(voxel_noise * torch.ones((weights.shape[0], locations.shape[0]))))
+            weights @ factors,
+            softplus(Variable(voxel_noise * torch.ones((weights.shape[0], factors.shape[1]))))
         )
 
     return tfa
@@ -100,20 +107,18 @@ def initialize_tfa_guide(activations, locations, num_factors):
     kmeans.fit(locations.numpy())
 
     mean_centers = torch.Tensor(kmeans.cluster_centers_)
-    mean_log_widths = np.log(2) + 2 * np.log(np.nanmax(np.std(locations.numpy(), axis=0)))
-    mean_log_widths *= torch.ones(num_factors)
+    mean_log_widths = torch.log(torch.Tensor([2]))
+    mean_log_widths += 2 * torch.log(torch.Tensor([locations.std(dim=0).max()]))
 
     initial_factors = utils.radial_basis(locations, mean_centers,
                                          mean_log_widths)
-    initial_factors_T = initial_factors.t()
-    activations_T = activations.t()
     initial_weights = torch.Tensor(
-        np.linalg.solve(initial_factors.matmul(initial_factors_T),
-                        initial_factors.matmul(activations_T))
-    )
+        np.linalg.solve(initial_factors @ initial_factors.t(),
+                        initial_factors @ activations.t())
+    ).t()
 
     def tfa_guide(times=None):
-        weight_mu = pyro.param('mean_weight', Variable(initial_weights.t(), requires_grad=True))
+        weight_mu = pyro.param('mean_weight', Variable(initial_weights, requires_grad=True))
         weight_sigma = pyro.param(
             'weight_std_dev',
             Variable(torch.sqrt(torch.rand((num_times, num_factors))), requires_grad=True)
@@ -136,7 +141,7 @@ def initialize_tfa_guide(activations, locations, num_factors):
 
         log_width_mu = pyro.param(
             'mean_factor_log_width',
-            Variable(mean_log_widths, requires_grad=True)
+            Variable(mean_log_widths * torch.ones((num_factors)), requires_grad=True)
         )
         log_width_sigma = pyro.param(
             'factor_log_width_std_dev',
@@ -176,3 +181,35 @@ class TopographicalFactorAnalysis:
                                               voxel_noise=VOXEL_NOISE)
         self.tfa_guide = initialize_tfa_guide(self.activations, self.locations,
                                               num_factors=num_factors)
+
+    def infer(self, epochs=EPOCHS, learning_rate=LEARNING_RATE, loss=LOSS,
+              log_level=logging.WARNING, num_particles=NUM_PARTICLES):
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=log_level)
+
+        pyro.clear_param_store()
+        data = {'activations': Variable(self.activations)}
+        if torch.cuda.is_available():
+            softplus.cuda()
+            data['activations'].cuda()
+        conditioned_tfa = pyro.condition(self.tfa_model, data=data)
+
+        svi = pyro.infer.SVI(model=conditioned_tfa, guide=self.tfa_guide,
+                             optim=pyro.optim.Adam({'lr': learning_rate}),
+                             loss=loss, num_particles=num_particles)
+
+        losses = np.zeros(epochs)
+        for e in range(epochs):
+            start = time.time()
+
+            losses[e] = svi.step()
+
+            end = time.time()
+            logging.info(EPOCH_MSG, e + 1, (end - start) * 1000, losses[e])
+
+        if torch.cuda.is_available():
+            data['activations'].cpu()
+            softplus.cpu()
+
+        return losses

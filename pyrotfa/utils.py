@@ -28,17 +28,17 @@ def radial_basis(locations, centers, log_widths):
     return torch.exp(-delta2s.sum(2) / torch.exp(log_widths.unsqueeze(1)))
 
 def plot_losses(losses):
-    epochs = range(losses.shape[1])
+    epochs = range(losses.shape[0])
 
-    free_energy_fig = plt.figure(figsize=(10, 10))
+    elbo_fig = plt.figure(figsize=(10, 10))
 
-    plt.plot(epochs, losses[0, :], 'b-', label='Data')
+    plt.plot(epochs, losses, 'b-', label='Free energy')
     plt.legend()
 
-    free_energy_fig.tight_layout()
-    plt.title('Free-energy / -ELBO change over training')
-    free_energy_fig.axes[0].set_xlabel('Epoch')
-    free_energy_fig.axes[0].set_ylabel('Free-energy / -ELBO (nats)')
+    elbo_fig.tight_layout()
+    plt.title('Free-energy change over training')
+    elbo_fig.axes[0].set_xlabel('Epoch')
+    elbo_fig.axes[0].set_ylabel('Nats')
 
     plt.show()
 
