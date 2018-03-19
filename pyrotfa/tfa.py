@@ -206,6 +206,7 @@ class TopographicalFactorAnalysis:
             start = time.time()
 
             losses[e] = svi.step()
+            self.reconstruct(*self.tfa_guide())
 
             end = time.time()
             logging.info(EPOCH_MSG, e + 1, (end - start) * 1000, losses[e])
@@ -215,6 +216,18 @@ class TopographicalFactorAnalysis:
             softplus.cpu()
 
         return losses
+
+    def reconstruct(self, weights, centers, log_widths):
+        factors = utils.radial_basis(Variable(self.locations), centers,
+                                     log_widths)
+        self.reconstruction = weights @ factors
+
+        logging.info(
+            'Reconstruction Error (Frobenius Norm): %.8e',
+            np.linalg.norm(self.reconstruction.data - self.activations)
+        )
+
+        return self.reconstruction
 
     def guide_means(self, log_level=logging.WARNING, matfile=None,
                     reconstruct=False):
@@ -227,19 +240,14 @@ class TopographicalFactorAnalysis:
         for (name, var) in params.named_parameters():
             if 'mean' in name:
                 means[name] = var.data
-        mean_factors = utils.radial_basis(self.locations,
-                                          means['mean_centers'],
-                                          means['mean_factor_log_width'])
 
         if matfile is not None:
             sio.savemat(matfile, means, do_compression=True)
 
         if reconstruct:
-            self.reconstruction = means['mean_weight'] @ mean_factors
-            logging.info(
-                'Reconstruction Error (Frobenius Norm): %.8e',
-                np.linalg.norm(self.reconstruction - self.activations)
-            )
+            self.reconstruct(Variable(means['mean_weight']),
+                             Variable(means['mean_centers']),
+                             Variable(means['mean_factor_log_width']))
 
         return means
 
