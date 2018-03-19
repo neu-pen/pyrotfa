@@ -182,6 +182,8 @@ class TopographicalFactorAnalysis:
         self.tfa_guide = initialize_tfa_guide(self.activations, self.locations,
                                               num_factors=num_factors)
 
+        self.reconstruction = None
+
     def infer(self, epochs=EPOCHS, learning_rate=LEARNING_RATE, loss=LOSS,
               log_level=logging.WARNING, num_particles=NUM_PARTICLES):
         logging.basicConfig(format='%(asctime)s %(message)s',
@@ -204,6 +206,7 @@ class TopographicalFactorAnalysis:
             start = time.time()
 
             losses[e] = svi.step()
+            self.reconstruct(*self.tfa_guide())
 
             end = time.time()
             logging.info(EPOCH_MSG, e + 1, (end - start) * 1000, losses[e])
@@ -213,3 +216,86 @@ class TopographicalFactorAnalysis:
             softplus.cpu()
 
         return losses
+
+    def reconstruct(self, weights, centers, log_widths):
+        factors = utils.radial_basis(Variable(self.locations), centers,
+                                     log_widths)
+        self.reconstruction = weights @ factors
+
+        logging.info(
+            'Reconstruction Error (Frobenius Norm): %.8e',
+            np.linalg.norm(self.reconstruction.data - self.activations)
+        )
+
+        return self.reconstruction
+
+    def guide_means(self, log_level=logging.WARNING, matfile=None,
+                    reconstruct=False):
+        logging.basicConfig(format='%(asctime)s %(message)s',
+                            datefmt='%m/%d/%Y %H:%M:%S',
+                            level=log_level)
+
+        params = pyro.get_param_store()
+        means = {}
+        for (name, var) in params.named_parameters():
+            if 'mean' in name:
+                means[name] = var.data
+
+        if matfile is not None:
+            sio.savemat(matfile, means, do_compression=True)
+
+        if reconstruct:
+            self.reconstruct(Variable(means['mean_weight']),
+                             Variable(means['mean_centers']),
+                             Variable(means['mean_factor_log_width']))
+
+        return means
+
+    def plot_voxels(self):
+        hyp.plot(self.locations.numpy(), 'k.')
+
+    def plot_factor_centers(self, filename=None, show=True,
+                            log_level=logging.WARNING):
+        means = self.guide_means(log_level=log_level)
+
+        plot = niplot.plot_connectome(
+            np.eye(self.num_factors),
+            means['mean_centers'],
+            node_color='k'
+        )
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_original_brain(self, filename=None, show=True, plot_abs=False):
+        original_image = utils.cmu2nii(self.activations.numpy(),
+                                       self.locations.numpy(),
+                                       self._template)
+        plot = niplot.plot_glass_brain(original_image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
+
+    def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
+                            log_level=logging.WARNING):
+        self.guide_means(log_level=log_level, reconstruct=True)
+
+        image = utils.cmu2nii(self.reconstruction,
+                              self.locations.numpy(),
+                              self._template)
+        plot = niplot.plot_glass_brain(image, plot_abs=plot_abs)
+
+        if filename is not None:
+            plot.savefig(filename)
+        if show:
+            niplot.show()
+
+        return plot
