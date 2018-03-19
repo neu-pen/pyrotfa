@@ -3,21 +3,37 @@ channels:
   - pytorch
   - defaults
 dependencies:
+  - _nb_ext_conf=0.4.0=py36_1
+  - anaconda-client=1.6.12=py36_0
+  - asn1crypto=0.24.0=py36_0
+  - bleach=2.1.2=py36_0
   - ca-certificates=2017.08.26=h1d4fec5_0
   - certifi=2018.1.18=py36_0
   - cffi=1.11.4=py36h9745a5d_0
+  - chardet=3.0.4=py36h0f667ec_1
+  - clyent=1.2.2=py36h7e57e65_1
+  - cryptography=2.1.4=py36hd09be54_0
   - cudatoolkit=8.0=3
   - cudnn=7.0.5=cuda8.0_0
   - decorator=4.2.1=py36_0
+  - entrypoints=0.2.3=py36h1aec115_2
   - freetype=2.8=hab7d2ae_1
+  - gmp=6.1.2=h6c8ec71_1
+  - html5lib=1.0.1=py36h2f9c1c0_0
+  - idna=2.6=py36h82fb2a8_1
   - intel-openmp=2018.0.0=hc7b2577_8
   - ipykernel=4.8.2=py36_0
   - ipython=6.2.1=py36h88c514a_1
   - ipython_genutils=0.2.0=py36hb52b0d5_0
+  - ipywidgets=7.1.2=py36_0
   - jedi=0.11.1=py36_0
+  - jinja2=2.10=py36ha16c418_0
   - jpeg=9b=h024ee3a_2
+  - jsonschema=2.6.0=py36h006f8b5_0
   - jupyter_client=5.2.2=py36_0
   - jupyter_core=4.4.0=py36h7c827e3_0
+  - jupyterlab=0.31.8=py36_0
+  - jupyterlab_launcher=0.10.2=py36_0
   - libedit=3.1=heed3624_0
   - libffi=3.2.1=hd88cf55_4
   - libgcc-ng=7.2.0=h7cc24e2_2
@@ -26,11 +42,22 @@ dependencies:
   - libsodium=1.0.15=hf101ebd_0
   - libstdcxx-ng=7.2.0=h7a57d05_2
   - libtiff=4.0.9=h28f6b97_0
+  - markupsafe=1.0=py36hd9260cd_1
+  - mistune=0.8.3=py36_0
   - mkl=2018.0.1=h19d6760_4
+  - nb_anacondacloud=1.4.0=py36_0
+  - nb_conda=2.2.1=py36h8118bb2_0
+  - nb_conda_kernels=2.1.0=py36_0
+  - nbconvert=5.3.1=py36hb41ffb7_0
+  - nbformat=4.4.0=py36h31c9010_0
+  - nbpresent=3.0.2=py36h5f95a39_1
   - ncurses=6.0=h9df7e31_2
+  - notebook=5.4.0=py36_0
   - numpy=1.14.1=py36h3dfced4_1
   - olefile=0.45.1=py36_0
   - openssl=1.0.2n=hb7f436b_0
+  - pandoc=1.19.2.1=hea2e7c5_1
+  - pandocfilters=1.4.2=py36ha6701b7_1
   - parso=0.1.1=py36h35f843b_0
   - pexpect=4.4.0=py36_0
   - pickleshare=0.7.4=py36h63277f8_0
@@ -40,34 +67,46 @@ dependencies:
   - ptyprocess=0.5.2=py36h69acd42_0
   - pycparser=2.18=py36hf9f622e_1
   - pygments=2.2.0=py36h0d3125c_0
+  - pyopenssl=17.5.0=py36h20ba746_0
+  - pysocks=1.6.8=py36_0
   - python=3.6.4=hc3d631a_1
   - python-dateutil=2.6.1=py36h88d3b88_1
+  - pytz=2018.3=py36_0
+  - pyyaml=3.12=py36hafb9ca4_1
   - pyzmq=16.0.3=py36he2533c7_0
   - readline=7.0=ha6073c6_4
+  - requests=2.18.4=py36he2e5f8d_1
+  - send2trash=1.5.0=py36_0
   - setuptools=38.5.1=py36_0
   - simplegeneric=0.8.1=py36_2
   - six=1.11.0=py36h372c433_1
   - sqlite=3.22.0=h1bed415_0
+  - terminado=0.8.1=py36_1
+  - testpath=0.3.1=py36h8cadb63_0
   - tk=8.6.7=hc745277_3
   - tornado=4.5.3=py36_0
   - traitlets=4.3.2=py36h674d592_0
+  - urllib3=1.22=py36hbe7ace6_0
   - wcwidth=0.1.7=py36hdf4376a_0
+  - webencodings=0.5.1=py36h800622e_1
   - wheel=0.30.0=py36hfd4bba0_1
+  - widgetsnbextension=3.1.4=py36_0
   - xz=5.2.3=h55aa19d_2
+  - yaml=0.1.7=had09818_2
   - zeromq=4.2.2=hbedb6e5_2
   - zlib=1.2.11=ha838bed_2
-  - pytorch=0.3.1=py36_cuda8.0.61_cudnn7.0.5_2
+  - cuda91=1.0=h4c16780_0
+  - pytorch=0.3.1=py36_cuda9.1.85_cudnn7.0.5_2
   - pytorch-cpu=0.3.1=py36_cpu_2
   - torchvision=0.2.0=py36h17b6947_1
   - pip:
-    - chardet==3.0.4
     - cloudpickle==0.5.2
     - cycler==0.10.0
     - deepdish==0.3.6
     - future==0.16.0
     - graphviz==0.8.2
     - hypertools==0.4.2
-    - idna==2.6
+    - ipdb==0.11
     - matplotlib==2.1.2
     - networkx==2.1
     - nibabel==2.2.1
@@ -78,14 +117,10 @@ dependencies:
     - ppca==0.0.3
     - pyparsing==2.2.0
     - pyro-ppl==0.1.2
-    - pytz==2018.3
-    - pyyaml==3.12
-    - requests==2.18.4
     - scikit-learn==0.19.1
     - scipy==1.0.0
     - seaborn==0.8.1
     - tables==3.4.2
     - torch==0.3.1.post2
-    - urllib3==1.22
-prefix: /home/work/anaconda3/envs/pyrotfa
+prefix: /home/eli/anaconda3/envs/pyrotfa
 
