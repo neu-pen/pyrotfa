@@ -42,7 +42,7 @@ VOXEL_NOISE = 0.1
 
 softplus = nn.Softplus()
 
-def tfa_prior(times=None,
+def tfa_prior(times=None, expand_weight_params=True,
               weight_mean=None, weight_std_dev=None,
               factor_center_mean=None, factor_center_std_dev=None,
               factor_log_width_mean=None, factor_log_width_std_dev=None,
@@ -50,10 +50,11 @@ def tfa_prior(times=None,
     if times is None:
         times = (0, num_times)
 
-    weight_mean = utils.unsqueeze_and_expand(weight_mean, 0,
-                                             times[1] - times[0], True)
-    weight_std_dev = utils.unsqueeze_and_expand(weight_std_dev, 0,
-                                                times[1] - times[0], True)
+    if expand_weight_params:
+        weight_mean = utils.unsqueeze_and_expand(weight_mean, 0,
+                                                 times[1] - times[0], True)
+        weight_std_dev = utils.unsqueeze_and_expand(weight_std_dev, 0,
+                                                    times[1] - times[0], True)
 
     weights = pyro.sample('weights', dist.normal, weight_mean,
                           softplus(weight_std_dev))
