@@ -14,6 +14,19 @@ import numpy as np
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
 import torch
+import torch.nn as nn
+
+import pyro
+
+class parameterized(nn.Module):
+    def __init__(self, f):
+        super(parameterized, self).__init__()
+        self._function = f
+        pyro.module(self._function.__name__, self)
+
+    def forward(self, *args, **kwargs):
+        params = {**self.state_dict(keep_vars=True), **kwargs}
+        return self._function(*args, **params)
 
 def unsqueeze_and_expand(tensor, dim, size, clone=False):
     if clone:
