@@ -117,35 +117,10 @@ class TopographicalFactorAnalysis:
             self.reconstruction = reconstruction
         return reconstruction
 
-    def guide_means(self, log_level=logging.WARNING, matfile=None,
-                    reconstruct=False):
-        logging.basicConfig(format='%(asctime)s %(message)s',
-                            datefmt='%m/%d/%Y %H:%M:%S',
-                            level=log_level)
-
-        params = pyro.get_param_store()
-        means = {}
-        for (name, var) in params.named_parameters():
-            if 'mean' in name:
-                means[name] = var.data
-
-        if matfile is not None:
-            sio.savemat(matfile, means, do_compression=True)
-
-        if reconstruct:
-            self.reconstruct(Variable(means['mean_weight']),
-                             Variable(means['mean_centers']),
-                             Variable(means['mean_factor_log_width']))
-
-        return means
-
     def plot_voxels(self):
         hyp.plot(self.locations.numpy(), 'k.')
 
-    def plot_factor_centers(self, filename=None, show=True,
-                            log_level=logging.WARNING):
-        means = self.guide_means(log_level=log_level)
-
+    def plot_factor_centers(self, filename=None, show=True):
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
             self.guide.prior.factor_center_mean.data.numpy(),
