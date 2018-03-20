@@ -68,6 +68,8 @@ def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
         SOURCE_LOG_WIDTH_STD_DEV * torch.ones(num_factors)
     )
 
+    activation_noise = Variable(voxel_noise * torch.eye(num_times, num_voxels))
+
     def tfa(times=None):
         weight_mu = mean_weight
         weight_sigma = weight_std_dev
@@ -93,7 +95,7 @@ def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
             'activations',
             dist.normal,
             weights @ factors,
-            softplus(Variable(voxel_noise * torch.ones((weights.shape[0], factors.shape[1]))))
+            softplus(activation_noise)
         )
 
     return tfa
