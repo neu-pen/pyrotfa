@@ -118,14 +118,17 @@ def initialize_tfa_guide(activations, locations, num_factors):
     ).t()
 
     def tfa_guide(times=None):
+        if times is None:
+            times = (0, num_times)
+
         weight_mu = pyro.param('mean_weight', Variable(initial_weights, requires_grad=True))
         weight_sigma = pyro.param(
             'weight_std_dev',
             Variable(torch.sqrt(torch.rand((num_times, num_factors))), requires_grad=True)
         )
-        if times is None:
-            times = (0, num_times)
-        weight = pyro.sample('weights', dist.normal, weight_mu, softplus(weight_sigma))
+        weight = pyro.sample('weights', dist.normal,
+                             weight_mu[times[0]:times[1], :],
+                             softplus(weight_sigma[times[0]:times[1], :]))
 
         centers_mu = pyro.param(
             'mean_centers',
