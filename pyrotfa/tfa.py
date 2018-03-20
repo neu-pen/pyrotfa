@@ -64,16 +64,18 @@ class TopographicalFactorAnalysis:
         self.reconstruction = None
 
     def infer(self, epochs=EPOCHS, learning_rate=LEARNING_RATE, loss=LOSS,
-              log_level=logging.WARNING, num_particles=NUM_PARTICLES):
+              log_level=logging.WARNING, num_particles=NUM_PARTICLES,
+              use_cuda=torch.cuda.is_available()):
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
 
         pyro.clear_param_store()
         data = {'activations': Variable(self.activations)}
-        if torch.cuda.is_available():
-            tfa_models.softplus.cuda()
-            data['activations'].cuda()
+        if use_cuda:
+            data['activations'] = data['activations'].cuda()
+            self.model.cuda()
+            self.guide.cuda()
         conditioned_tfa = pyro.condition(self.model, data=data)
 
         svi = pyro.infer.SVI(model=conditioned_tfa, guide=self.guide,
@@ -85,28 +87,35 @@ class TopographicalFactorAnalysis:
             start = time.time()
 
             losses[e] = svi.step()
-            self.reconstruct(*self.guide())
+            self.reconstruct(*self.guide(), use_cuda=use_cuda)
 
             end = time.time()
             logging.info(EPOCH_MSG, e + 1, (end - start) * 1000, losses[e])
 
-        if torch.cuda.is_available():
-            data['activations'].cpu()
-            tfa_models.softplus.cpu()
+        if use_cuda:
+            self.guide.cpu()
+            self.model.cpu()
+            data['activations'] = data['activations'].cpu()
 
         return losses
 
-    def reconstruct(self, weights, centers, log_widths):
-        factors = utils.radial_basis(Variable(self.locations), centers,
+    def reconstruct(self, weights, centers, log_widths, use_cuda=False,
+                    save=False):
+        locations = self.locations.cuda() if use_cuda else self.locations.cpu()
+        activations =\
+            self.activations.cuda() if use_cuda else self.activations.cpu()
+        factors = utils.radial_basis(Variable(locations), centers,
                                      log_widths)
-        self.reconstruction = weights @ factors
+        reconstruction = weights @ factors
 
         logging.info(
             'Reconstruction Error (Frobenius Norm): %.8e',
-            np.linalg.norm(self.reconstruction.data - self.activations)
+            np.linalg.norm(reconstruction.data - activations)
         )
 
-        return self.reconstruction
+        if save:
+            self.reconstruction = reconstruction
+        return reconstruction
 
     def guide_means(self, log_level=logging.WARNING, matfile=None,
                     reconstruct=False):

@@ -92,6 +92,7 @@ def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
             super(Model, self).__init__()
             self.prior = prior
             self.likelihood = likelihood
+            self.softplus = softplus
 
         def forward(self, *args, **kwargs):
             pyro.module('tfa_model', self)
@@ -139,6 +140,7 @@ def parameterize_tfa_guide(activations, locations, num_factors):
         def __init__(self):
             super(Guide, self).__init__()
             self.prior = prior
+            self.softplus = softplus
 
         def forward(self, *args, **kwargs):
             pyro.module('tfa_guide', self)
