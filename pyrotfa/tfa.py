@@ -68,6 +68,8 @@ def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
         SOURCE_LOG_WIDTH_STD_DEV * torch.ones(num_factors)
     )
 
+    activation_noise = Variable(voxel_noise * torch.eye(num_times, num_voxels))
+
     def tfa(times=None):
         weight_mu = mean_weight
         weight_sigma = weight_std_dev
@@ -93,7 +95,7 @@ def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
             'activations',
             dist.normal,
             weights @ factors,
-            softplus(Variable(voxel_noise * torch.ones((weights.shape[0], factors.shape[1]))))
+            softplus(activation_noise)
         )
 
     return tfa
@@ -118,14 +120,17 @@ def initialize_tfa_guide(activations, locations, num_factors):
     ).t()
 
     def tfa_guide(times=None):
+        if times is None:
+            times = (0, num_times)
+
         weight_mu = pyro.param('mean_weight', Variable(initial_weights, requires_grad=True))
         weight_sigma = pyro.param(
             'weight_std_dev',
             Variable(torch.sqrt(torch.rand((num_times, num_factors))), requires_grad=True)
         )
-        if times is None:
-            times = (0, num_times)
-        weight = pyro.sample('weights', dist.normal, weight_mu, softplus(weight_sigma))
+        weight = pyro.sample('weights', dist.normal,
+                             weight_mu[times[0]:times[1], :],
+                             softplus(weight_sigma[times[0]:times[1], :]))
 
         centers_mu = pyro.param(
             'mean_centers',
