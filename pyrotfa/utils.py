@@ -19,7 +19,8 @@ def unsqueeze_and_expand(tensor, dim, size, clone=False):
     if clone:
         tensor = tensor.clone()
 
-    shape = [size] + list(tensor.shape)
+    shape = list(tensor.shape)
+    shape.insert(dim, size)
     return tensor.unsqueeze(dim).expand(*shape)
 
 def radial_basis(locations, centers, log_widths):
