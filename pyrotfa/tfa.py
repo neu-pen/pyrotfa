@@ -42,63 +42,84 @@ VOXEL_NOISE = 0.1
 
 softplus = nn.Softplus()
 
-def initialize_tfa_model(activations, locations, num_factors, voxel_noise):
+def tfa_prior(times=None,
+              weight_mean=None, weight_std_dev=None,
+              factor_center_mean=None, factor_center_std_dev=None,
+              factor_log_width_mean=None, factor_log_width_std_dev=None,
+              num_times=None):
+    if times is None:
+        times = (0, num_times)
+
+    weight_mean = utils.unsqueeze_and_expand(weight_mean, 0,
+                                             times[1] - times[0], True)
+    weight_std_dev = utils.unsqueeze_and_expand(weight_std_dev, 0,
+                                                times[1] - times[0], True)
+
+    weights = pyro.sample('weights', dist.normal, weight_mean,
+                          softplus(weight_std_dev))
+
+    factor_centers = pyro.sample('factor_centers', dist.normal,
+                                 factor_center_mean,
+                                 softplus(factor_center_std_dev))
+    factor_log_widths = pyro.sample('factor_log_widths', dist.normal,
+                                    factor_log_width_mean,
+                                    softplus(factor_log_width_std_dev))
+
+    return weights, factor_centers, factor_log_widths
+
+def tfa_likelihood(weights, factor_centers, factor_log_widths, locations=None,
+                   activation_noise=None):
+    factors = utils.radial_basis(locations, factor_centers.data,
+                                 factor_log_widths.data)
+
+    return pyro.sample(
+        'activations',
+        dist.normal,
+        weights @ Variable(factors),
+        softplus(activation_noise)
+    )
+
+def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
     num_times = activations.shape[0]
     num_voxels = activations.shape[1]
 
     brain_center = torch.mean(locations, 0).unsqueeze(0)
     brain_center_std_dev = torch.sqrt(10 * torch.var(locations, 0).unsqueeze(0))
 
-    mean_weight = Variable(torch.zeros((num_factors)))
-    weight_std_dev = Variable(SOURCE_WEIGHT_STD_DEV * torch.ones(
-        (num_factors)
+    prior = utils.parameterized(tfa_prior)
+    prior.register_buffer('weight_mean', Variable(torch.zeros(num_factors)))
+    prior.register_buffer(
+        'weight_std_dev',
+        Variable(SOURCE_WEIGHT_STD_DEV * torch.ones(num_factors))
+    )
+    prior.register_buffer('factor_center_mean',
+                          Variable(brain_center.expand(num_factors, 3)))
+    prior.register_buffer('factor_center_std_dev', Variable(
+        brain_center_std_dev.expand(num_factors, 3)
     ))
+    prior.register_buffer('factor_log_width_mean',
+                          Variable(torch.ones(num_factors)))
+    prior.register_buffer('factor_log_width_std_dev',
+                          Variable(SOURCE_LOG_WIDTH_STD_DEV *\
+                                   torch.ones(num_factors)))
 
-    mean_factor_center = Variable(
-        brain_center.expand(num_factors, 3) *
-        torch.ones((num_factors, 3))
-    )
-    factor_center_std_dev = Variable(
-        brain_center_std_dev.expand(num_factors, 3) *
-        torch.ones((num_factors, 3))
-    )
+    likelihood = utils.parameterized(tfa_likelihood)
+    likelihood.register_buffer('locations', locations)
+    likelihood.register_buffer('activation_noise',
+                               Variable(voxel_noise *\
+                                        torch.eye(num_times, num_voxels)))
 
-    mean_factor_log_width = Variable(torch.ones(num_factors))
-    factor_log_width_std_dev = Variable(
-        SOURCE_LOG_WIDTH_STD_DEV * torch.ones(num_factors)
-    )
+    class Model(nn.Module):
+        def __init__(self):
+            super(Model, self).__init__()
+            self.prior = prior
+            self.likelihood = likelihood
 
-    activation_noise = Variable(voxel_noise * torch.eye(num_times, num_voxels))
+        def forward(self, *args, **kwargs):
+            kwargs['num_times'] = num_times
+            return self.likelihood(*self.prior(*args, **kwargs))
 
-    def tfa(times=None):
-        weight_mu = mean_weight
-        weight_sigma = weight_std_dev
-
-        if times is None:
-            times = (0, num_times)
-
-        weight_mu = utils.unsqueeze_and_expand(weight_mu, 0,
-                                               times[1] - times[0], True)
-        weight_sigma = utils.unsqueeze_and_expand(weight_sigma, 0,
-                                                  times[1] - times[0], True)
-        weights = pyro.sample('weights', dist.normal, weight_mu, softplus(weight_sigma))
-
-        factor_centers = pyro.sample('factor_centers', dist.normal,
-                                     mean_factor_center, softplus(factor_center_std_dev))
-        factor_log_widths = pyro.sample('factor_log_widths', dist.normal,
-                                        mean_factor_log_width,
-                                        softplus(factor_log_width_std_dev))
-        factors = Variable(utils.radial_basis(locations, factor_centers.data,
-                                              factor_log_widths.data))
-
-        return pyro.sample(
-            'activations',
-            dist.normal,
-            weights @ factors,
-            softplus(activation_noise)
-        )
-
-    return tfa
+    return Model()
 
 def initialize_tfa_guide(activations, locations, num_factors):
     num_times = activations.shape[0]
@@ -180,10 +201,10 @@ class TopographicalFactorAnalysis:
         # This could be a huge file.  Close it
         del dataset
 
-        self.tfa_model = initialize_tfa_model(self.activations,
-                                              self.locations,
-                                              num_factors=num_factors,
-                                              voxel_noise=VOXEL_NOISE)
+        self.tfa_model = parameterize_tfa_model(self.activations,
+                                                self.locations,
+                                                num_factors=num_factors,
+                                                voxel_noise=VOXEL_NOISE)
         self.tfa_guide = initialize_tfa_guide(self.activations, self.locations,
                                               num_factors=num_factors)
 
