@@ -122,7 +122,7 @@ def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
 
     return Model()
 
-def initialize_tfa_guide(activations, locations, num_factors):
+def parameterize_tfa_guide(activations, locations, num_factors):
     num_times = activations.shape[0]
 
     # Initialize our center, width, and weight parameters via K-means
@@ -133,6 +133,7 @@ def initialize_tfa_guide(activations, locations, num_factors):
     mean_centers = torch.Tensor(kmeans.cluster_centers_)
     mean_log_widths = torch.log(torch.Tensor([2]))
     mean_log_widths += 2 * torch.log(torch.Tensor([locations.std(dim=0).max()]))
+    mean_log_widths = mean_log_widths * torch.ones(num_factors)
 
     initial_factors = utils.radial_basis(locations, mean_centers,
                                          mean_log_widths)
@@ -141,45 +142,32 @@ def initialize_tfa_guide(activations, locations, num_factors):
                         initial_factors @ activations.t())
     ).t()
 
-    def tfa_guide(times=None):
-        if times is None:
-            times = (0, num_times)
+    prior = utils.parameterized(tfa_prior)
+    prior.register_parameter('weight_mean', Parameter(initial_weights))
+    prior.register_parameter(
+        'weight_std_dev',
+        Parameter(torch.sqrt(torch.rand((num_times, num_factors))))
+    )
+    prior.register_parameter('factor_center_mean', Parameter(mean_centers))
+    prior.register_parameter('factor_center_std_dev', Parameter(
+        torch.sqrt(torch.rand(num_factors, 3))
+    ))
+    prior.register_parameter('factor_log_width_mean',
+                             Parameter(mean_log_widths))
+    prior.register_parameter('factor_log_width_std_dev',
+                             Parameter(torch.sqrt(torch.rand(num_factors))))
 
-        weight_mu = pyro.param('mean_weight', Variable(initial_weights, requires_grad=True))
-        weight_sigma = pyro.param(
-            'weight_std_dev',
-            Variable(torch.sqrt(torch.rand((num_times, num_factors))), requires_grad=True)
-        )
-        weight = pyro.sample('weights', dist.normal,
-                             weight_mu[times[0]:times[1], :],
-                             softplus(weight_sigma[times[0]:times[1], :]))
+    class Guide(nn.Module):
+        def __init__(self):
+            super(Guide, self).__init__()
+            self.prior = prior
 
-        centers_mu = pyro.param(
-            'mean_centers',
-            Variable(mean_centers, requires_grad=True)
-        )
-        center_sigma = pyro.param(
-            'factor_center_std_dev',
-            Variable(torch.sqrt(torch.rand((num_factors, 3))),
-                     requires_grad=True)
-        )
-        factor_center = pyro.sample('factor_centers', dist.normal,
-                                    centers_mu, softplus(center_sigma))
+        def forward(self, *args, **kwargs):
+            kwargs['num_times'] = num_times
+            kwargs['expand_weight_params'] = False
+            return self.prior(*args, **kwargs)
 
-        log_width_mu = pyro.param(
-            'mean_factor_log_width',
-            Variable(mean_log_widths * torch.ones((num_factors)), requires_grad=True)
-        )
-        log_width_sigma = pyro.param(
-            'factor_log_width_std_dev',
-            Variable(torch.sqrt(torch.rand((num_factors))), requires_grad=True)
-        )
-        factor_log_width = pyro.sample('factor_log_widths', dist.normal,
-                                       log_width_mu,
-                                       softplus(log_width_sigma))
-        return (weight, factor_center, factor_log_width)
-
-    return tfa_guide
+    return Guide()
 
 class TopographicalFactorAnalysis:
     """Overall container for a run of TFA"""
@@ -206,8 +194,9 @@ class TopographicalFactorAnalysis:
                                                 self.locations,
                                                 num_factors=num_factors,
                                                 voxel_noise=VOXEL_NOISE)
-        self.tfa_guide = initialize_tfa_guide(self.activations, self.locations,
-                                              num_factors=num_factors)
+        self.tfa_guide = parameterize_tfa_guide(self.activations,
+                                                self.locations,
+                                                num_factors=num_factors)
 
         self.reconstruction = None
 
