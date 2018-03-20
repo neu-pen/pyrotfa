@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 """Utilities for topographic factor analysis"""
 
+import logging
 import warnings
 
 try:
@@ -14,9 +15,21 @@ import numpy as np
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
 import torch
+from torch.autograd import Variable
 import torch.nn as nn
 
 import pyro
+
+def reconstruct(weights, centers, log_widths, locations, activations):
+    factors = radial_basis(Variable(locations), centers, log_widths)
+    reconstruction = weights @ factors
+
+    logging.info(
+        'Reconstruction Error (Frobenius Norm): %.8e',
+        np.linalg.norm(reconstruction.data - activations)
+    )
+
+    return reconstruction
 
 class parameterized(nn.Module):
     def __init__(self, f):

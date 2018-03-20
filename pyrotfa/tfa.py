@@ -87,7 +87,6 @@ class TopographicalFactorAnalysis:
             start = time.time()
 
             losses[e] = svi.step()
-            self.reconstruct(*self.guide(), use_cuda=use_cuda)
 
             end = time.time()
             logging.info(EPOCH_MSG, e + 1, (end - start) * 1000, losses[e])
@@ -98,24 +97,6 @@ class TopographicalFactorAnalysis:
             data['activations'] = data['activations'].cpu()
 
         return losses
-
-    def reconstruct(self, weights, centers, log_widths, use_cuda=False,
-                    save=False):
-        locations = self.locations.cuda() if use_cuda else self.locations.cpu()
-        activations =\
-            self.activations.cuda() if use_cuda else self.activations.cpu()
-        factors = utils.radial_basis(Variable(locations), centers,
-                                     log_widths)
-        reconstruction = weights @ factors
-
-        logging.info(
-            'Reconstruction Error (Frobenius Norm): %.8e',
-            np.linalg.norm(reconstruction.data - activations)
-        )
-
-        if save:
-            self.reconstruction = reconstruction
-        return reconstruction
 
     def plot_voxels(self):
         hyp.plot(self.locations.numpy(), 'k.')
@@ -148,11 +129,15 @@ class TopographicalFactorAnalysis:
         return plot
 
     def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
-                            log_level=logging.WARNING):
-        self.reconstruct(self.guide.prior.weight_mean,
-                         self.guide.prior.factor_center_mean,
-                         self.guide.prior.factor_log_width_mean,
-                         save=True)
+                            refresh=False):
+        if self.reconstruction is None or refresh:
+            self.reconstruction = utils.reconstruct(
+                self.guide.prior.weight_mean,
+                self.guide.prior.factor_center_mean,
+                self.guide.prior.factor_log_width_mean,
+                self.locations,
+                self.activations
+            )
 
         image = utils.cmu2nii(self.reconstruction,
                               self.locations.numpy(),
