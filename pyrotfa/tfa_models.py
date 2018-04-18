@@ -62,7 +62,7 @@ def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
     num_voxels = activations.shape[1]
 
     brain_center = torch.mean(locations, 0).unsqueeze(0)
-    brain_center_std_dev = torch.sqrt(10 * torch.var(locations, 0).unsqueeze(0))
+    brain_center_std_dev = torch.sqrt(torch.var(locations, 0)).unsqueeze(0)
 
     prior = utils.parameterized(tfa_prior)
     prior.register_buffer('weight_mean', Variable(torch.zeros(num_factors)))
