@@ -1,5 +1,6 @@
 """Perform plain topographic factor analysis on a given fMRI data file."""
 
+import gc
 import logging
 import math
 import os
@@ -65,7 +66,7 @@ class TopographicalFactorAnalysis:
 
     def infer(self, epochs=EPOCHS, learning_rate=LEARNING_RATE, loss=LOSS,
               log_level=logging.WARNING, num_particles=NUM_PARTICLES,
-              use_cuda=torch.cuda.is_available()):
+              use_cuda=torch.cuda.is_available(), checkpoint_epochs=100):
         logging.basicConfig(format='%(asctime)s %(message)s',
                             datefmt='%m/%d/%Y %H:%M:%S',
                             level=log_level)
@@ -90,6 +91,9 @@ class TopographicalFactorAnalysis:
 
             end = time.time()
             logging.info(EPOCH_MSG, e + 1, (end - start) * 1000, losses[e])
+
+            if e % checkpoint_epochs == 0:
+                gc.collect()
 
         if use_cuda:
             self.guide.cpu()
