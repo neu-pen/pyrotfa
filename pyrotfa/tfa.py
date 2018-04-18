@@ -102,10 +102,15 @@ class TopographicalFactorAnalysis:
         hyp.plot(self.locations.numpy(), 'k.')
 
     def plot_factor_centers(self, filename=None, show=True):
+        centers = self.guide.prior.factor_center_mean.data
+        center_uncertainties = self.guide.prior.factor_center_std_dev.data
+        widths = self.guide.prior.factor_log_width_mean.data
+
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
-            self.guide.prior.factor_center_mean.data.numpy(),
-            node_color='k'
+            centers.numpy(),
+            node_color=utils.uncertainty_palette(center_uncertainties),
+            node_size=np.exp(widths.numpy() - np.log(2))
         )
 
         if filename is not None:

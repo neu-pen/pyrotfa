@@ -11,6 +11,7 @@ try:
 finally:
     import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
@@ -130,3 +131,23 @@ def cmu2nii(activations, locations, template):
             data[x, y, z, i] = activations[i, j]
 
     return nib.Nifti1Image(data[:, :, :, 0], affine=sform)
+
+def uncertainty_alphas(uncertainties):
+    if len(uncertainties.shape) > 1:
+        uncertainties = np.array([
+            [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
+        ])
+    else:
+        uncertainties = uncertainties.numpy()
+    return uncertainties / (1.0 + uncertainties)
+
+def compose_palette(length, base='dark', alphas=None):
+    palette = np.array(sns.color_palette(base, length))
+    if alphas is not None:
+        return np.concatenate([palette, alphas], axis=1)
+    return palette
+
+def uncertainty_palette(uncertainties):
+    alphas = uncertainty_alphas(uncertainties)
+    return compose_palette(uncertainties.shape[0], base='cubehelix',
+                           alphas=alphas)
