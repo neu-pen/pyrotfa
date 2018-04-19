@@ -19,34 +19,30 @@ VOXEL_NOISE = 0.1
 
 softplus = nn.Softplus()
 
-def tfa_prior(times=None, expand_weight_params=True,
-              weight_mean=None, weight_std_dev=None,
-              factor_center_mean=None, factor_center_std_dev=None,
-              factor_log_width_mean=None, factor_log_width_std_dev=None,
-              num_times=None):
+def tfa_prior(times=None, expand_weight_params=True, num_times=None, params={}):
     if times is None:
         times = (0, num_times)
 
     if expand_weight_params:
-        weight_mean = utils.unsqueeze_and_expand(weight_mean, 0,
-                                                 times[1] - times[0], True)
-        weight_std_dev = utils.unsqueeze_and_expand(weight_std_dev, 0,
-                                                    times[1] - times[0], True)
+        for k in params['weights']:
+            shape = params['weights'][k].shape
+            params['weights'][k] =\
+                params['weights'][k].expand(times[1] - times[0], *shape)
 
-    weights = pyro.sample('weights', dist.normal, weight_mean,
-                          softplus(weight_std_dev))
+    weights = pyro.sample('weights', dist.normal, params['weights']['mu'],
+                          softplus(params['weights']['sigma']))
 
     factor_centers = pyro.sample('factor_centers', dist.normal,
-                                 factor_center_mean,
-                                 softplus(factor_center_std_dev))
+                                 params['factor_centers']['mu'],
+                                 softplus(params['factor_centers']['sigma']))
     factor_log_widths = pyro.sample('factor_log_widths', dist.normal,
-                                    factor_log_width_mean,
-                                    softplus(factor_log_width_std_dev))
+                                    params['factor_log_widths']['mu'],
+                                    softplus(params['factor_log_widths']['sigma']))
 
     return weights, factor_centers, factor_log_widths
 
 def tfa_likelihood(weights, factor_centers, factor_log_widths, locations=None,
-                   activation_noise=None):
+                   params={}):
     factors = utils.radial_basis(locations, factor_centers.data,
                                  factor_log_widths.data)
 
@@ -54,7 +50,7 @@ def tfa_likelihood(weights, factor_centers, factor_log_widths, locations=None,
         'activations',
         dist.normal,
         weights @ Variable(factors),
-        softplus(activation_noise)
+        softplus(params['activations']['sigma'])
     )
 
 def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
@@ -64,42 +60,37 @@ def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
     brain_center = torch.mean(locations, 0).unsqueeze(0)
     brain_center_std_dev = torch.sqrt(torch.var(locations, 0)).unsqueeze(0)
 
-    prior = utils.parameterized(tfa_prior)
-    prior.register_buffer('weight_mean', Variable(torch.zeros(num_factors)))
-    prior.register_buffer(
-        'weight_std_dev',
-        Variable(SOURCE_WEIGHT_STD_DEV * torch.ones(num_factors))
-    )
-    prior.register_buffer('factor_center_mean',
-                          Variable(brain_center.expand(num_factors, 3)))
-    prior.register_buffer('factor_center_std_dev', Variable(
-        brain_center_std_dev.expand(num_factors, 3)
-    ))
-    prior.register_buffer('factor_log_width_mean',
-                          Variable(torch.ones(num_factors)))
-    prior.register_buffer('factor_log_width_std_dev',
-                          Variable(SOURCE_LOG_WIDTH_STD_DEV *\
-                                   torch.ones(num_factors)))
+    prior = utils.PyroPartial(tfa_prior)
+    prior.num_times = num_times
+    prior.register_params({
+        'weights': {
+            'mu': torch.zeros(num_factors),
+            'sigma': SOURCE_WEIGHT_STD_DEV * torch.ones(num_factors),
+        },
+        'factor_centers': {
+            'mu': brain_center.expand(num_factors, 3),
+            'sigma': brain_center_std_dev.expand(num_factors, 3),
+        },
+        'factor_log_widths': {
+            'mu': torch.ones(num_factors),
+            'sigma': SOURCE_LOG_WIDTH_STD_DEV * torch.ones(num_factors),
+        },
+    }, trainable=False)
 
-    likelihood = utils.parameterized(tfa_likelihood)
+    likelihood = utils.PyroPartial(tfa_likelihood)
     likelihood.register_buffer('locations', locations)
-    likelihood.register_buffer('activation_noise',
-                               Variable(voxel_noise *\
-                                        torch.eye(num_times, num_voxels)))
+    likelihood.register_params({
+        'activations': {
+            'sigma': voxel_noise * torch.eye(num_times, num_voxels)
+        }
+    }, trainable=False)
 
-    class Model(nn.Module):
-        def __init__(self):
-            super(Model, self).__init__()
-            self.prior = prior
-            self.likelihood = likelihood
-            self.softplus = softplus
-
-        def forward(self, *args, **kwargs):
-            pyro.module('tfa_model', self)
-            kwargs['num_times'] = num_times
-            return self.likelihood(*self.prior(*args, **kwargs))
-
-    return Model()
+    result = utils.PyroPartial.compose(likelihood, prior, unpack=True,
+                                       name='tfa_model')
+    result.likelihood = likelihood
+    result.prior = prior
+    result.softplus = softplus
+    return result
 
 def parameterize_tfa_guide(activations, locations, num_factors):
     num_times = activations.shape[0]
@@ -121,31 +112,23 @@ def parameterize_tfa_guide(activations, locations, num_factors):
                         initial_factors @ activations.t())
     ).t()
 
-    prior = utils.parameterized(tfa_prior)
-    prior.register_parameter('weight_mean', Parameter(initial_weights))
-    prior.register_parameter(
-        'weight_std_dev',
-        Parameter(torch.sqrt(torch.rand((num_times, num_factors))))
-    )
-    prior.register_parameter('factor_center_mean', Parameter(mean_centers))
-    prior.register_parameter('factor_center_std_dev', Parameter(
-        torch.sqrt(torch.rand(num_factors, 3))
-    ))
-    prior.register_parameter('factor_log_width_mean',
-                             Parameter(mean_log_widths))
-    prior.register_parameter('factor_log_width_std_dev',
-                             Parameter(torch.sqrt(torch.rand(num_factors))))
+    prior = utils.PyroPartial(tfa_prior)
+    prior.num_times = num_times
+    prior.expand_weight_params = False
+    prior.register_params({
+        'weights': {
+            'mu': initial_weights,
+            'sigma': torch.sqrt(torch.rand(num_times, num_factors)),
+        },
+        'factor_centers': {
+            'mu': mean_centers,
+            'sigma': torch.sqrt(torch.rand(num_factors, 3)),
+        },
+        'factor_log_widths': {
+            'mu': mean_log_widths,
+            'sigma': torch.sqrt(torch.rand(num_factors)),
+        },
+    }, trainable=True)
 
-    class Guide(nn.Module):
-        def __init__(self):
-            super(Guide, self).__init__()
-            self.prior = prior
-            self.softplus = softplus
-
-        def forward(self, *args, **kwargs):
-            pyro.module('tfa_guide', self)
-            kwargs['num_times'] = num_times
-            kwargs['expand_weight_params'] = False
-            return self.prior(*args, **kwargs)
-
-    return Guide()
+    pyro.module('tfa_guide', prior)
+    return prior
