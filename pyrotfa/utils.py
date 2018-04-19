@@ -1,7 +1,10 @@
 #!/usr/bin/env python
 """Utilities for topographic factor analysis"""
 
+import flatdict
+import inspect
 import logging
+import types
 import warnings
 
 try:
@@ -31,6 +34,17 @@ def reconstruct(weights, centers, log_widths, locations, activations):
     )
 
     return reconstruction
+
+def vardict(existing=None):
+    vdict = flatdict.FlatDict(delimiter='__')
+    if existing:
+        for (k, v) in existing.items():
+            vdict[k] = v
+    return vdict
+
+def vardict_keys(vdict):
+    first_level = [k.rsplit('__', 1)[0] for k in vdict.keys()]
+    return list(set(first_level))
 
 class parameterized(nn.Module):
     def __init__(self, f):
