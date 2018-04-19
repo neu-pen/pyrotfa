@@ -73,7 +73,7 @@ class TopographicalFactorAnalysis:
 
         pyro.clear_param_store()
         data = {'activations': Variable(self.activations)}
-        if use_cuda:
+        if torch.cuda.is_available() and use_cuda:
             data['activations'] = data['activations'].cuda()
             self.model.cuda()
             self.guide.cuda()
@@ -95,7 +95,7 @@ class TopographicalFactorAnalysis:
             if e % checkpoint_epochs == 0:
                 gc.collect()
 
-        if use_cuda:
+        if torch.cuda.is_available() and use_cuda:
             self.guide.cpu()
             self.model.cpu()
             data['activations'] = data['activations'].cpu()
