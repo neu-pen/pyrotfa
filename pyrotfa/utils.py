@@ -46,14 +46,56 @@ def vardict_keys(vdict):
     first_level = [k.rsplit('__', 1)[0] for k in vdict.keys()]
     return list(set(first_level))
 
-class parameterized(nn.Module):
-    def __init__(self, f):
-        super(parameterized, self).__init__()
+class PyroPartial(nn.Module):
+    def __init__(self, f, params_namespace='params'):
+        super(PyroPartial, self).__init__()
         self._function = f
+        self._params_namespace = params_namespace
         pyro.module(self._function.__name__, self)
 
+    @classmethod
+    def compose(cls, outer, inner, unpack=False, name=None):
+        if unpack:
+            result = lambda *args, **kwargs: outer(*inner(*args, **kwargs))
+        else:
+            result = lambda *args, **kwargs: outer(inner(*args, **kwargs))
+
+        if name is not None:
+            result.__name__ = name
+
+        return PyroPartial(result)
+
+    def register_params(self, pdict, trainable=True):
+        for (k, v) in vardict(pdict).iteritems():
+            if self._params_namespace is not None:
+                k = self._params_namespace + '__' + k
+            if trainable:
+                self.register_parameter(k, nn.Parameter(v))
+            else:
+                self.register_buffer(k, v)
+
+    def params_vardict(self, keep_vars=False):
+        result = self.state_dict(keep_vars=keep_vars)
+        if self._params_namespace is not None:
+            prefix = self._params_namespace + '__'
+            result = {k[len(prefix):]: v for (k, v) in result.items()
+                      if k.startswith(prefix)}
+        for k, v in result.items():
+            if isinstance(v, nn.Parameter):
+                pyro.param(k, v)
+            elif not isinstance(v, Variable):
+                result[k] = Variable(v)
+        return vardict(result)
+
+    def kwargs_dict(self):
+        members = dict(self.__dict__, **self.state_dict(keep_vars=True))
+        return {k: v for (k, v) in members.items()
+                if k in inspect.signature(self._function).parameters.keys()}
+
     def forward(self, *args, **kwargs):
-        params = {**self.state_dict(keep_vars=True), **kwargs}
+        params = {**self.kwargs_dict(), **kwargs}
+        if self._params_namespace is not None:
+            params[self._params_namespace] = self.params_vardict(keep_vars=True)
         return self._function(*args, **params)
 
 def unsqueeze_and_expand(tensor, dim, size, clone=False):
