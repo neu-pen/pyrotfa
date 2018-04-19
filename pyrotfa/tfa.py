@@ -106,9 +106,10 @@ class TopographicalFactorAnalysis:
         hyp.plot(self.locations.numpy(), 'k.')
 
     def plot_factor_centers(self, filename=None, show=True):
-        centers = self.guide.prior.factor_center_mean.data
-        center_uncertainties = self.guide.prior.factor_center_std_dev.data
-        widths = self.guide.prior.factor_log_width_mean.data
+        guide_params = self.guide.params_vardict()
+        centers = guide_params['factor_centers']['mu'].data
+        center_uncertainties = guide_params['factor_centers']['sigma'].data
+        widths = guide_params['factor_log_widths']['mu'].data
 
         plot = niplot.plot_connectome(
             np.eye(self.num_factors),
@@ -139,11 +140,13 @@ class TopographicalFactorAnalysis:
 
     def plot_reconstruction(self, filename=None, show=True, plot_abs=False,
                             refresh=False):
+
         if self.reconstruction is None or refresh:
+            guide_params = self.guide.params_vardict()
             self.reconstruction = utils.reconstruct(
-                self.guide.prior.weight_mean,
-                self.guide.prior.factor_center_mean,
-                self.guide.prior.factor_log_width_mean,
+                guide_params['weights']['mu'],
+                guide_params['factor_centers']['mu'],
+                guide_params['factor_log_widths']['mu'],
                 self.locations,
                 self.activations
             )
