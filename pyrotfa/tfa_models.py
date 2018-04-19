@@ -50,7 +50,7 @@ def tfa_likelihood(weights, factor_centers, factor_log_widths, locations=None,
         'activations',
         dist.normal,
         weights @ Variable(factors),
-        softplus(params['activations']['sigma'])
+        params['activations']['sigma']
     )
 
 def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
@@ -81,7 +81,7 @@ def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
     likelihood.register_buffer('locations', locations)
     likelihood.register_params({
         'activations': {
-            'sigma': voxel_noise * torch.eye(num_times, num_voxels)
+            'sigma': voxel_noise * torch.ones(num_times, num_voxels)
         }
     }, trainable=False)
 
