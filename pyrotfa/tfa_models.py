@@ -43,13 +43,13 @@ def tfa_prior(times=None, expand_weight_params=True, num_times=None, params={}):
 
 def tfa_likelihood(weights, factor_centers, factor_log_widths, locations=None,
                    params={}):
-    factors = utils.radial_basis(locations, factor_centers.data,
-                                 factor_log_widths.data)
+    factors = utils.radial_basis(Variable(locations, requires_grad=True), factor_centers,
+                                 factor_log_widths)
 
     return pyro.sample(
         'activations',
         dist.normal,
-        weights @ Variable(factors),
+        weights @ factors,
         params['activations']['sigma']
     )
 
