@@ -108,7 +108,9 @@ class TopographicalFactorAnalysis:
     def plot_factor_centers(self, filename=None, show=True):
         guide_params = self.guide.params_vardict()
         centers = guide_params['factor_centers']['mu'].data
-        center_uncertainties = guide_params['factor_centers']['sigma'].data
+        center_uncertainties = tfa_models.softplus(
+            guide_params['factor_centers']['sigma']
+        ).data
         widths = guide_params['factor_log_widths']['mu'].data
 
         plot = niplot.plot_connectome(
