@@ -76,8 +76,6 @@ def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
 
     result = utils.PyroPartial.compose(likelihood, prior, unpack=True,
                                        name='tfa_model')
-    result.likelihood = likelihood
-    result.prior = prior
     result.SOFTPLUS = utils.SOFTPLUS
     return result
 

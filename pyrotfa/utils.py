@@ -76,7 +76,14 @@ class PyroPartial(nn.Module):
         if name is not None:
             result.__name__ = name
 
-        return PyroPartial(result)
+        result = PyroPartial(result)
+        for (i, element) in enumerate([inner, outer]):
+            if isinstance(element, nn.Module):
+                elt_name = element._function.__name__\
+                           if isinstance(element, cls)\
+                           else 'element%d' % i
+                result.add_module(elt_name, element)
+        return result
 
     def register_params(self, pdict, trainable=True):
         for (k, v) in vardict(pdict).iteritems():
