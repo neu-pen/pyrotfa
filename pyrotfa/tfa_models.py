@@ -17,8 +17,6 @@ SOURCE_WEIGHT_STD_DEV = np.sqrt(2.0)
 SOURCE_LOG_WIDTH_STD_DEV = np.sqrt(3.0)
 VOXEL_NOISE = 0.1
 
-softplus = nn.Softplus()
-
 def tfa_prior(times=None, expand_weight_params=True, num_times=None, params={}):
     if times is None:
         times = (0, num_times)
@@ -89,7 +87,7 @@ def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
                                        name='tfa_model')
     result.likelihood = likelihood
     result.prior = prior
-    result.softplus = softplus
+    result.SOFTPLUS = utils.SOFTPLUS
     return result
 
 def parameterize_tfa_guide(activations, locations, num_factors):
