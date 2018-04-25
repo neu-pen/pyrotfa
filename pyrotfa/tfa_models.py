@@ -27,29 +27,20 @@ def tfa_prior(times=None, expand_weight_params=True, num_times=None, params={}):
             params['weights'][k] =\
                 params['weights'][k].expand(times[1] - times[0], *shape)
 
-    weights = pyro.sample('weights', dist.normal, params['weights']['mu'],
-                          softplus(params['weights']['sigma']))
-
-    factor_centers = pyro.sample('factor_centers', dist.normal,
-                                 params['factor_centers']['mu'],
-                                 softplus(params['factor_centers']['sigma']))
-    factor_log_widths = pyro.sample('factor_log_widths', dist.normal,
-                                    params['factor_log_widths']['mu'],
-                                    softplus(params['factor_log_widths']['sigma']))
+    weights = utils.param_sample('weights', dist.normal, params)
+    factor_centers = utils.param_sample('factor_centers', dist.normal, params)
+    factor_log_widths = utils.param_sample('factor_log_widths', dist.normal,
+                                           params)
 
     return weights, factor_centers, factor_log_widths
 
 def tfa_likelihood(weights, factor_centers, factor_log_widths, locations=None,
                    params={}):
-    factors = utils.radial_basis(Variable(locations, requires_grad=True), factor_centers,
-                                 factor_log_widths)
+    factors = utils.radial_basis(Variable(locations, requires_grad=True),
+                                 factor_centers, factor_log_widths)
 
-    return pyro.sample(
-        'activations',
-        dist.normal,
-        weights @ factors,
-        params['activations']['sigma']
-    )
+    return utils.param_sample('activations', dist.normal, params,
+                              mu=weights @ factors)
 
 def parameterize_tfa_model(activations, locations, num_factors, voxel_noise):
     num_times = activations.shape[0]
