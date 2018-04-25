@@ -24,6 +24,19 @@ import torch.nn as nn
 
 import pyro
 
+SOFTPLUS = nn.Softplus()
+PARAM_TRANSFORMS = {
+    'sigma': SOFTPLUS,
+}
+
+def param_sample(rv, dist, params, transforms=PARAM_TRANSFORMS, **kwargs):
+    params = {**params[rv].copy(), **kwargs}
+    for k, v in params.items():
+        if k in transforms:
+            params[k] = transforms[k](v)
+
+    return pyro.sample(rv, dist, **params)
+
 def reconstruct(weights, centers, log_widths, locations, activations):
     factors = radial_basis(Variable(locations), centers, log_widths)
     reconstruction = weights @ factors
