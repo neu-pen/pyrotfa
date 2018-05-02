@@ -1,6 +1,10 @@
 #!/usr/bin/env python
 """Utilities for topographic factor analysis"""
 
+import flatdict
+import inspect
+import logging
+import types
 import warnings
 
 try:
@@ -10,16 +14,116 @@ try:
 finally:
     import matplotlib.pyplot as plt
 import numpy as np
+import seaborn as sns
 
 import nibabel as nib
 from nilearn.input_data import NiftiMasker
 import torch
+from torch.autograd import Variable
+import torch.nn as nn
+
+import pyro
+
+SOFTPLUS = nn.Softplus()
+PARAM_TRANSFORMS = {
+    'sigma': SOFTPLUS,
+}
+
+def param_sample(rv, dist, params, transforms=PARAM_TRANSFORMS, **kwargs):
+    params = {**params[rv].copy(), **kwargs}
+    for k, v in params.items():
+        if k in transforms:
+            params[k] = transforms[k](v)
+
+    return pyro.sample(rv, dist, **params)
+
+def reconstruct(weights, centers, log_widths, locations, activations):
+    factors = radial_basis(Variable(locations), centers, log_widths)
+    reconstruction = weights @ factors
+
+    logging.info(
+        'Reconstruction Error (Frobenius Norm): %.8e',
+        np.linalg.norm(reconstruction.data - activations)
+    )
+
+    return reconstruction
+
+def vardict(existing=None):
+    vdict = flatdict.FlatDict(delimiter='__')
+    if existing:
+        for (k, v) in existing.items():
+            vdict[k] = v
+    return vdict
+
+def vardict_keys(vdict):
+    first_level = [k.rsplit('__', 1)[0] for k in vdict.keys()]
+    return list(set(first_level))
+
+class PyroPartial(nn.Module):
+    def __init__(self, f, params_namespace='params'):
+        super(PyroPartial, self).__init__()
+        self._function = f
+        self._params_namespace = params_namespace
+        pyro.module(self._function.__name__, self)
+
+    @classmethod
+    def compose(cls, outer, inner, unpack=False, name=None):
+        if unpack:
+            result = lambda *args, **kwargs: outer(*inner(*args, **kwargs))
+        else:
+            result = lambda *args, **kwargs: outer(inner(*args, **kwargs))
+
+        if name is not None:
+            result.__name__ = name
+
+        result = PyroPartial(result)
+        for (i, element) in enumerate([inner, outer]):
+            if isinstance(element, nn.Module):
+                elt_name = element._function.__name__\
+                           if isinstance(element, cls)\
+                           else 'element%d' % i
+                result.add_module(elt_name, element)
+        return result
+
+    def register_params(self, pdict, trainable=True):
+        for (k, v) in vardict(pdict).iteritems():
+            if self._params_namespace is not None:
+                k = self._params_namespace + '__' + k
+            if trainable:
+                self.register_parameter(k, nn.Parameter(v))
+            else:
+                self.register_buffer(k, v)
+
+    def params_vardict(self, keep_vars=False):
+        result = self.state_dict(keep_vars=keep_vars)
+        if self._params_namespace is not None:
+            prefix = self._params_namespace + '__'
+            result = {k[len(prefix):]: v for (k, v) in result.items()
+                      if k.startswith(prefix)}
+        for k, v in result.items():
+            if isinstance(v, nn.Parameter):
+                pyro.param(k, v)
+            elif not isinstance(v, Variable):
+                result[k] = Variable(v)
+        return vardict(result)
+
+    def kwargs_dict(self):
+        members = dict(self.__dict__, **self.state_dict(keep_vars=True))
+        return {k: v for (k, v) in members.items()
+                if k in inspect.signature(self._function).parameters.keys()}
+
+    def forward(self, *args, **kwargs):
+        params = {**self.kwargs_dict(), **kwargs}
+        if self._params_namespace is not None:
+            params[self._params_namespace] = self.params_vardict(keep_vars=True)
+        return self._function(*args, **params)
 
 def unsqueeze_and_expand(tensor, dim, size, clone=False):
     if clone:
         tensor = tensor.clone()
 
-    shape = [size] + list(tensor.shape)
+    shape = list(tensor.shape)
+    shape.insert(dim, size)
     return tensor.unsqueeze(dim).expand(*shape)
 
 def radial_basis(locations, centers, log_widths):
@@ -103,3 +207,23 @@ def cmu2nii(activations, locations, template):
             data[x, y, z, i] = activations[i, j]
 
     return nib.Nifti1Image(data[:, :, :, 0], affine=sform)
+
+def uncertainty_alphas(uncertainties):
+    if len(uncertainties.shape) > 1:
+        uncertainties = np.array([
+            [u] for u in np.linalg.norm((uncertainties**-2).numpy(), axis=1)
+        ])
+    else:
+        uncertainties = uncertainties.numpy()
+    return uncertainties / (1.0 + uncertainties)
+
+def compose_palette(length, base='dark', alphas=None):
+    palette = np.array(sns.color_palette(base, length))
+    if alphas is not None:
+        return np.concatenate([palette, alphas], axis=1)
+    return palette
+
+def uncertainty_palette(uncertainties):
+    alphas = uncertainty_alphas(uncertainties)
+    return compose_palette(uncertainties.shape[0], base='cubehelix',
+                           alphas=alphas)
